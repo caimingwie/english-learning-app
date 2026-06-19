@@ -441,26 +441,37 @@ export async function seedData({ words, sentences, grammar, collocations }) {
 
   const db = await openDB();
 
-  // Use a transaction for bulk insert
-  const tx = db.transaction(['words', 'sentences', 'grammar', 'collocations', 'settings'], 'readwrite');
-
+  // Use separate transactions for each store to avoid idb multi-store restriction
+  const wordsTx = db.transaction('words', 'readwrite');
   for (const word of words) {
-    await tx.store.put(word);
+    await wordsTx.store.put(word);
   }
+  await wordsTx.done;
+
+  const sentTx = db.transaction('sentences', 'readwrite');
   for (const sentence of sentences) {
-    await tx.store.put(sentence);
+    await sentTx.store.put(sentence);
   }
+  await sentTx.done;
+
+  const gramTx = db.transaction('grammar', 'readwrite');
   for (const gp of grammar) {
-    await tx.store.put(gp);
+    await gramTx.store.put(gp);
   }
+  await gramTx.done;
+
+  const collTx = db.transaction('collocations', 'readwrite');
   for (const coll of collocations) {
-    await tx.store.put(coll);
+    await collTx.store.put(coll);
   }
+  await collTx.done;
 
   // Set default settings
+  const settingsTx = db.transaction('settings', 'readwrite');
   for (const [key, value] of Object.entries(DEFAULT_SETTINGS)) {
-    await tx.store.put({ key, value });
+    await settingsTx.store.put({ key, value });
   }
+  await settingsTx.done;
 
   await tx.done;
   return true;
