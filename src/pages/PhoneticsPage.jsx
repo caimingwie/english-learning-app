@@ -4,6 +4,7 @@ import SpeakerButton from '../components/SpeakerButton';
 
 /**
  * Full IPA phonetics reference chart.
+ * Click the speaker icon to hear the phoneme sound (not the example word).
  */
 export default function PhoneticsPage() {
   const [activeTab, setActiveTab] = useState('vowels'); // 'vowels' | 'consonants'
@@ -32,15 +33,15 @@ export default function PhoneticsPage() {
       <div className="phonetics-grid">
         {currentList.map((item, index) => (
           <div key={index} className="phonetic-card">
-            <div className="phonetic-card__symbol">{item.symbol}</div>
-            <div className="phonetic-card__example">
-              {item.exampleWord}
+            <div className="phonetic-card__symbol">
+              <span className="phonetic-symbol-text">/{item.symbol}/</span>
               <SpeakerButton
-                text={item.exampleWord.split(' ')[0]}
-                label={`听 "${item.exampleWord}" 的发音`}
+                text={item.speakText}
+                label={`听 /${item.symbol}/ 的发音`}
                 small
               />
             </div>
+            <div className="phonetic-card__example">{item.exampleWord}</div>
             <div className="phonetic-card__desc">{item.description}</div>
           </div>
         ))}
