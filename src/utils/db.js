@@ -349,7 +349,7 @@ export const DEFAULT_SETTINGS = {
   seeded: false,
   wordbook: [],           // Array of word IDs saved to 生词本
   theme: 'auto',          // 'light' | 'dark' | 'auto'
-  anthropic_api_key: '',  // XOR-obfuscated + base64 encoded
+  deepseek_api_key: '',   // XOR-obfuscated + base64 encoded (DeepSeek API)
   ai_enabled: true        // Whether AI features are active
 };
 
@@ -523,9 +523,9 @@ export function deobfuscateApiKey(encoded) {
 }
 
 /**
- * Get the decrypted API key from settings (or empty string if not set).
+ * Get the decrypted DeepSeek API key from settings (or empty string if not set).
  */
 export async function getApiKey() {
-  const encoded = await getSetting('anthropic_api_key');
+  const encoded = await getSetting('deepseek_api_key');
   return deobfuscateApiKey(encoded);
 }

@@ -35,7 +35,7 @@ Return ONLY a JSON object (no markdown, no extra text) with this structure:
 const CACHE_KEY_PREFIX = 'ai_recommendation_';
 
 /**
- * Hook that fetches AI-powered study recommendations from Claude API.
+ * Hook that fetches AI-powered study recommendations from DeepSeek API.
  *
  * @param {object} options
  * @param {boolean} options.enabled - Whether AI features are enabled
@@ -87,21 +87,23 @@ export function useAIRecommendations({ enabled = true } = {}) {
         return;
       }
 
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
+      // DeepSeek API (OpenAI-compatible format)
+      const response = await fetch('https://api.deepseek.com/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true'
+          'Authorization': `Bearer ${apiKey}`
         },
         body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
+          model: 'deepseek-chat',
           max_tokens: 800,
-          system: SYSTEM_PROMPT,
-          messages: [{ role: 'user', content: JSON.stringify(analytics, null, 2) }]
+          temperature: 0.7,
+          messages: [
+            { role: 'system', content: SYSTEM_PROMPT },
+            { role: 'user', content: JSON.stringify(analytics, null, 2) }
+          ]
         }),
-        signal: AbortSignal.timeout(15000)
+        signal: AbortSignal.timeout(30000)
       });
 
       if (!response.ok) {
@@ -110,7 +112,7 @@ export function useAIRecommendations({ enabled = true } = {}) {
       }
 
       const data = await response.json();
-      const text = data.content?.[0]?.text || '';
+      const text = data.choices?.[0]?.message?.content || '';
 
       // Parse JSON from response (handle possible markdown wrapping)
       let parsed;

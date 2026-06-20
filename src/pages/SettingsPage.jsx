@@ -23,8 +23,8 @@ export default function SettingsPage({ onClose }) {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   // Load current API key (masked)
-  const hasApiKey = !!(settings.anthropic_api_key && settings.anthropic_api_key.length > 0);
-  const savedKey = settings.anthropic_api_key || '';
+  const hasApiKey = !!(settings.deepseek_api_key && settings.deepseek_api_key.length > 0);
+  const savedKey = settings.deepseek_api_key || '';
 
   // Test API connection
   const handleTestConnection = useCallback(async () => {
@@ -37,16 +37,14 @@ export default function SettingsPage({ onClose }) {
     setApiStatus('testing');
     setApiError('');
     try {
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
+      const response = await fetch('https://api.deepseek.com/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': keyToTest,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true'
+          'Authorization': `Bearer ${keyToTest}`
         },
         body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
+          model: 'deepseek-chat',
           max_tokens: 10,
           messages: [{ role: 'user', content: 'Hi' }]
         }),
@@ -78,7 +76,7 @@ export default function SettingsPage({ onClose }) {
     }
     // Store as base64 to avoid binary issues
     const encoded = btoa(unescape(encodeURIComponent(obfuscated)));
-    await updateSetting('anthropic_api_key', encoded);
+    await updateSetting('deepseek_api_key', encoded);
     setApiKeyInput('');
     setApiStatus('idle');
     setApiError('');
@@ -86,7 +84,7 @@ export default function SettingsPage({ onClose }) {
 
   // Clear API key
   const handleClearKey = useCallback(async () => {
-    await updateSetting('anthropic_api_key', '');
+    await updateSetting('deepseek_api_key', '');
     setApiKeyInput('');
     setApiStatus('idle');
     setApiError('');
@@ -272,9 +270,9 @@ export default function SettingsPage({ onClose }) {
         <div className="settings-section">
           <h3>🤖 AI 助手</h3>
           <GlassCard className="settings-card">
-            <div className="settings-row__label">Anthropic API Key</div>
+            <div className="settings-row__label">DeepSeek API Key</div>
             <div className="settings-row__hint" style={{ marginBottom: 8 }}>
-              用于 AI 个性化学习推荐。Key 仅存储在本设备，仅发送至 api.anthropic.com。
+              用于 AI 个性化学习推荐。Key 仅存储在本设备，仅发送至 api.deepseek.com。
             </div>
 
             {hasApiKey && !apiKeyInput ? (
@@ -298,7 +296,7 @@ export default function SettingsPage({ onClose }) {
                   <input
                     type={showKey ? 'text' : 'password'}
                     className="api-key-input"
-                    placeholder="sk-ant-api03-..."
+                    placeholder="sk-..."
                     value={apiKeyInput}
                     onChange={(e) => setApiKeyInput(e.target.value)}
                   />
@@ -334,7 +332,7 @@ export default function SettingsPage({ onClose }) {
             )}
 
             <div className="settings-warning">
-              ⚠️ 你的 API Key 经过混淆后存储在浏览器 IndexedDB 中，仅通过 HTTPS 发送至 Anthropic 官方 API。请不要在公共设备上保存 Key。
+              ⚠️ 你的 API Key 经过混淆后存储在浏览器 IndexedDB 中，仅通过 HTTPS 发送至 DeepSeek 官方 API。请不要在公共设备上保存 Key。
             </div>
           </GlassCard>
         </div>
@@ -396,7 +394,7 @@ export default function SettingsPage({ onClose }) {
                 AI 驱动的智能英语学习应用
               </p>
               <p style={{ fontSize: 12, color: 'var(--color-text-tertiary)', marginTop: 8 }}>
-                基于艾宾浩斯记忆法 + Claude AI 个性化推荐
+                基于艾宾浩斯记忆法 + DeepSeek AI 个性化推荐
               </p>
               <p style={{ fontSize: 12, color: 'var(--color-text-tertiary)', marginTop: 4 }}>
                 GitHub: caimingwie/english-learning-app

@@ -9,7 +9,7 @@ import GlassCard from './GlassCard';
  */
 export default function AIRecommendation() {
   const { state, setShowSettings, setActiveTab, setActiveSubTab } = useAppContext();
-  const hasApiKey = !!(state.settings?.anthropic_api_key);
+  const hasApiKey = !!(state.settings?.deepseek_api_key);
   const aiEnabled = state.settings?.ai_enabled !== false;
   const isOnline = navigator.onLine;
 
@@ -39,7 +39,7 @@ export default function AIRecommendation() {
       {/* Not configured */}
       {!hasApiKey && (
         <div className="ai-offline-notice">
-          <p>🔑 在设置中填写 Anthropic API Key</p>
+          <p>🔑 在设置中填写 DeepSeek API Key</p>
           <p style={{ marginTop: 4, fontSize: 12 }}>解锁 AI 个性化学习推荐</p>
           <button
             className="btn btn--small btn--primary"
