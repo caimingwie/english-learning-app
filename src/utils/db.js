@@ -346,7 +346,7 @@ export const DEFAULT_SETTINGS = {
   quizQuota: 20,
   speechRate: 0.7,
   grammarProgress: 0,
-  seeded: true,
+  seeded: false,
   wordbook: [] // Array of word IDs saved to 生词本
 };
 
@@ -466,11 +466,13 @@ export async function seedData({ words, sentences, grammar, collocations }) {
   }
   await collTx.done;
 
-  // Set default settings
+  // Set default settings (seeded will be overwritten to true below)
   const settingsTx = db.transaction('settings', 'readwrite');
   for (const [key, value] of Object.entries(DEFAULT_SETTINGS)) {
     await settingsTx.store.put({ key, value });
   }
+  // Mark as seeded so we don't re-seed on next load
+  await settingsTx.store.put({ key: 'seeded', value: true });
   await settingsTx.done;
 
   await tx.done;
