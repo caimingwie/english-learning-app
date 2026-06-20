@@ -347,7 +347,10 @@ export const DEFAULT_SETTINGS = {
   speechRate: 0.7,
   grammarProgress: 0,
   seeded: false,
-  wordbook: [] // Array of word IDs saved to 生词本
+  wordbook: [],           // Array of word IDs saved to 生词本
+  theme: 'auto',          // 'light' | 'dark' | 'auto'
+  anthropic_api_key: '',  // XOR-obfuscated + base64 encoded
+  ai_enabled: true        // Whether AI features are active
 };
 
 export async function getSetting(key) {
@@ -477,4 +480,52 @@ export async function seedData({ words, sentences, grammar, collocations }) {
 
   await tx.done;
   return true;
+}
+
+// ──── API Key Encryption (XOR + Base64) ──────────────────────────────────────
+
+/**
+ * XOR-obfuscate and base64-encode an API key for storage.
+ * NOT true encryption — prevents casual inspection of IndexedDB.
+ */
+export function obfuscateApiKey(plaintext) {
+  if (!plaintext) return '';
+  const salt = 'ela-salt-' + (typeof navigator !== 'undefined' ? (navigator.userAgent || '').slice(0, 20) : 'default');
+  let obfuscated = '';
+  for (let i = 0; i < plaintext.length; i++) {
+    obfuscated += String.fromCharCode(
+      plaintext.charCodeAt(i) ^ salt.charCodeAt(i % salt.length)
+    );
+  }
+  // Encode to base64 to avoid binary string issues
+  return btoa(unescape(encodeURIComponent(obfuscated)));
+}
+
+/**
+ * Decode and deobfuscate an API key from storage.
+ * Returns the original plaintext key or empty string.
+ */
+export function deobfuscateApiKey(encoded) {
+  if (!encoded) return '';
+  try {
+    const obfuscated = decodeURIComponent(escape(atob(encoded)));
+    const salt = 'ela-salt-' + (typeof navigator !== 'undefined' ? (navigator.userAgent || '').slice(0, 20) : 'default');
+    let plaintext = '';
+    for (let i = 0; i < obfuscated.length; i++) {
+      plaintext += String.fromCharCode(
+        obfuscated.charCodeAt(i) ^ salt.charCodeAt(i % salt.length)
+      );
+    }
+    return plaintext;
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Get the decrypted API key from settings (or empty string if not set).
+ */
+export async function getApiKey() {
+  const encoded = await getSetting('anthropic_api_key');
+  return deobfuscateApiKey(encoded);
 }

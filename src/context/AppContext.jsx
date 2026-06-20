@@ -22,6 +22,8 @@ async function getAllWords() {
 // ──── Actions ────────────────────────────────────────────────────────────────
 const ACTIONS = {
   SET_TAB: 'SET_TAB',
+  SET_SUB_TAB: 'SET_SUB_TAB',
+  SET_SHOW_SETTINGS: 'SET_SHOW_SETTINGS',
   UPDATE_SETTING: 'UPDATE_SETTING',
   LOAD_SETTINGS: 'LOAD_SETTINGS',
   SET_INSTALL_PROMPT: 'SET_INSTALL_PROMPT',
@@ -32,6 +34,8 @@ const ACTIONS = {
 // ──── Initial State ──────────────────────────────────────────────────────────
 const initialState = {
   activeTab: 0,
+  activeSubTab: 0,
+  showSettings: false,
   settings: {
     dailyWordQuota: 20,
     dailySentenceQuota: 10,
@@ -39,7 +43,10 @@ const initialState = {
     quizQuota: 20,
     speechRate: 0.7,
     grammarProgress: 0,
-    wordbook: []
+    wordbook: [],
+    theme: 'auto',
+    anthropic_api_key: '',
+    ai_enabled: true
   },
   installPrompt: null,
   dbReady: false,
@@ -52,6 +59,10 @@ function appReducer(state, action) {
   switch (action.type) {
     case ACTIONS.SET_TAB:
       return { ...state, activeTab: action.payload };
+    case ACTIONS.SET_SUB_TAB:
+      return { ...state, activeSubTab: action.payload };
+    case ACTIONS.SET_SHOW_SETTINGS:
+      return { ...state, showSettings: action.payload };
     case ACTIONS.LOAD_SETTINGS:
       return { ...state, settings: { ...state.settings, ...action.payload }, loading: false };
     case ACTIONS.UPDATE_SETTING:
@@ -129,6 +140,14 @@ export function AppProvider({ children }) {
     dispatch({ type: ACTIONS.SET_TAB, payload: tab });
   }, []);
 
+  const setActiveSubTab = useCallback((tab) => {
+    dispatch({ type: ACTIONS.SET_SUB_TAB, payload: tab });
+  }, []);
+
+  const setShowSettings = useCallback((show) => {
+    dispatch({ type: ACTIONS.SET_SHOW_SETTINGS, payload: show });
+  }, []);
+
   const updateSetting = useCallback(async (key, value) => {
     dispatch({ type: ACTIONS.UPDATE_SETTING, payload: { key, value } });
     try {
@@ -146,6 +165,8 @@ export function AppProvider({ children }) {
     state,
     dispatch,
     setActiveTab,
+    setActiveSubTab,
+    setShowSettings,
     updateSetting,
     dismissInstallPrompt
   };

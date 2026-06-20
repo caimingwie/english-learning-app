@@ -1,12 +1,12 @@
 {
-  "name": "英语基础学习助手",
+  "name": "英语学习助手",
   "short_name": "英语学习",
-  "description": "基于艾宾浩斯记忆法的英语学习应用，支持背单词、学句子、语法、搭配及测验",
+  "description": "AI 驱动的智能英语学习应用 - 艾宾浩斯记忆法 + 个性化推荐",
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "theme_color": "#1a73e8",
-  "background_color": "#ffffff",
+  "theme_color": "#f0f2f5",
+  "background_color": "#f0f2f5",
   "icons": [
     {
       "src": "/icons/icon-192.png",

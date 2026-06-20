@@ -64,3 +64,121 @@ export function groupBy(array, keyFn) {
     return acc;
   }, {});
 }
+
+/**
+ * Get today's date as YYYY-MM-DD string.
+ */
+export function getTodayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * Compute study analytics from IndexedDB data for AI recommendation.
+ *
+ * @param {object} options
+ * @param {Array} options.words - All word records
+ * @param {Array} options.sentences - All sentence records
+ * @param {Array} options.collocations - All collocation records
+ * @param {Array} options.mistakes - All mistake records
+ * @param {Array} options.studyLogs - All study log records
+ * @param {object} options.settings - User settings
+ * @returns {object} Analytics payload for AI prompt
+ */
+export function computeStudyAnalytics({ words, sentences, collocations, mistakes, studyLogs, settings }) {
+  const today = getTodayStr();
+
+  // Count items by status
+  const countByStatus = (items) => ({
+    new: items.filter(i => i.status === 'new').length,
+    learning: items.filter(i => i.status === 'learning').length,
+    review: items.filter(i => i.status === 'review').length,
+    mastered: items.filter(i => i.status === 'mastered').length
+  });
+
+  const wordStatus = countByStatus(words);
+  const sentStatus = countByStatus(sentences);
+  const collStatus = countByStatus(collocations);
+
+  // Recent study logs (last 30 days)
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const recentLogs = studyLogs.filter(l => {
+    const d = l.date || (l.timestamp ? l.timestamp.split('T')[0] : '');
+    return d >= thirtyDaysAgo.toISOString().split('T')[0];
+  });
+
+  // Mistake analysis
+  const wordMistakes = {};
+  for (const m of mistakes) {
+    if (m.itemType === 'word' && m.content) {
+      wordMistakes[m.content] = (wordMistakes[m.content] || 0) + 1;
+    }
+  }
+  const topMistakeWords = Object.entries(wordMistakes)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+    .map(([word, count]) => {
+      const found = words.find(w => w.word === word);
+      return { word, mistakes: count, meaning: found?.meaning || '' };
+    });
+
+  // Recent mistakes last 7 days
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  const recentMistakes = mistakes.filter(m => {
+    const ts = m.timestamp || '';
+    return ts >= sevenDaysAgo.toISOString();
+  });
+
+  // Average daily study
+  const daysWithActivity = [...new Set(recentLogs.map(l => l.date || l.timestamp?.split('T')[0]))].filter(Boolean);
+  const avgDailyWords = daysWithActivity.length > 0
+    ? Math.round(recentLogs.filter(l => l.itemType === 'word').length / daysWithActivity.length)
+    : 0;
+
+  // Items due today
+  const itemsDueToday = (items) => items.filter(i => {
+    if (!i.nextReview) return false;
+    return i.nextReview.split('T')[0] <= today;
+  }).length;
+
+  return {
+    student_profile: {
+      study_streak_days: 0, // computed elsewhere
+      total_words: words.length,
+      words_new: wordStatus.new,
+      words_learning: wordStatus.learning,
+      words_review: wordStatus.review,
+      words_mastered: wordStatus.mastered,
+      sentences_mastered: sentStatus.mastered,
+      sentences_learning: sentStatus.learning + sentStatus.review,
+      collocations_mastered: collStatus.mastered,
+      collocations_learning: collStatus.learning + collStatus.review,
+      grammar_progress: `${(settings.grammarProgress || 0) + 1}/18`
+    },
+    mistake_analysis: {
+      total_mistakes: mistakes.length,
+      by_type: {
+        word: mistakes.filter(m => m.itemType === 'word').length,
+        sentence: mistakes.filter(m => m.itemType === 'sentence').length,
+        collocation: mistakes.filter(m => m.itemType === 'collocation').length,
+        quiz: mistakes.filter(m => m.errorType === 'quiz').length
+      },
+      top_mistake_words: topMistakeWords,
+      recent_mistakes_last_7d: recentMistakes.length
+    },
+    study_patterns: {
+      avg_daily_words: avgDailyWords,
+      total_study_days: daysWithActivity.length,
+      words_due_today: itemsDueToday(words),
+      sentences_due_today: itemsDueToday(sentences),
+      collocations_due_today: itemsDueToday(collocations)
+    },
+    current_settings: {
+      daily_word_quota: settings.dailyWordQuota || 20,
+      daily_sentence_quota: settings.dailySentenceQuota || 10,
+      daily_collocation_quota: settings.dailyCollocationQuota || 10
+    }
+  };
+}

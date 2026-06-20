@@ -2,14 +2,10 @@ import React from 'react';
 import { useAppContext } from '../context/AppContext';
 
 const TABS = [
-  { icon: '🧠', label: '单词', key: 'words' },
-  { icon: '📖', label: '句子', key: 'sentences' },
-  { icon: '❌', label: '错题', key: 'mistakes' },
-  { icon: '🔤', label: '音标', key: 'phonetics' },
-  { icon: '📚', label: '语法', key: 'grammar' },
-  { icon: '📝', label: '测验', key: 'quiz' },
-  { icon: '📑', label: '词汇库', key: 'vocabulary' },
-  { icon: '🔗', label: '搭配', key: 'collocations' }
+  { icon: '📊', label: '首页', key: 'home' },
+  { icon: '📖', label: '学习', key: 'study' },
+  { icon: '🔍', label: '复习', key: 'review' },
+  { icon: '📑', label: '词库', key: 'library' }
 ];
 
 export default function BottomNav() {
