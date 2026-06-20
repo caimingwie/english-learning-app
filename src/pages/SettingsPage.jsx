@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { useTheme } from '../context/ThemeContext';
+import { deobfuscateApiKey } from '../utils/db';
 import ThemeToggle from '../components/ThemeToggle';
 import GlassCard from '../components/GlassCard';
 
@@ -28,7 +29,11 @@ export default function SettingsPage({ onClose }) {
 
   // Test API connection
   const handleTestConnection = useCallback(async () => {
-    const keyToTest = apiKeyInput || savedKey;
+    // Use input if typed, otherwise decrypt the saved key
+    let keyToTest = apiKeyInput;
+    if (!keyToTest && savedKey) {
+      keyToTest = deobfuscateApiKey(savedKey);
+    }
     if (!keyToTest) {
       setApiStatus('error');
       setApiError('请先输入 API Key');
