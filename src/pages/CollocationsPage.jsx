@@ -7,7 +7,7 @@ import StickyButtons from '../components/StickyButtons';
 
 /**
  * Collocation (固定搭配) learning page.
- * Uses the same useStudy hook pattern as WordsPage.
+ * Flow: See phrase → Click 认识/不认识 → See meaning + phonetic → Click 下一题 → Next
  */
 export default function CollocationsPage() {
   const { state, updateSetting } = useAppContext();
@@ -19,47 +19,18 @@ export default function CollocationsPage() {
     progress,
     isComplete,
     respond,
+    advance,
+    goBack,
+    canGoBack,
+    canGoNext,
+    answered,
+    sessionStats,
     reset,
     isLoading,
     error
   } = useStudy({ itemType: 'collocation', dailyQuota });
 
-  const [meaningRevealed, setMeaningRevealed] = useState(false);
-  const [sessionSummary, setSessionSummary] = useState(null);
   const [quotaSelector, setQuotaSelector] = useState(false);
-
-  const sessionStats = React.useRef({ known: 0, unknown: 0 });
-
-  React.useEffect(() => {
-    setMeaningRevealed(false);
-  }, [currentItem?.id]);
-
-  const handleKnow = async () => {
-    if (!currentItem) return;
-    sessionStats.current.known++;
-    setMeaningRevealed(true);
-    await respond(true);
-    if (progress.done + 1 >= progress.total && progress.total > 0) {
-      setSessionSummary({ ...sessionStats.current });
-    }
-  };
-
-  const handleDontKnow = async () => {
-    if (!currentItem) return;
-    sessionStats.current.unknown++;
-    setMeaningRevealed(true);
-    await respond(false);
-    if (progress.done + 1 >= progress.total && progress.total > 0) {
-      setSessionSummary({ ...sessionStats.current });
-    }
-  };
-
-  const handleReset = () => {
-    sessionStats.current = { known: 0, unknown: 0 };
-    setSessionSummary(null);
-    setMeaningRevealed(false);
-    reset();
-  };
 
   // ── Loading ──
   if (isLoading) {
@@ -85,17 +56,17 @@ export default function CollocationsPage() {
   }
 
   // ── Completion ──
-  if (isComplete || sessionSummary) {
+  if (isComplete) {
     return (
       <div className="page">
         <h2 className="page__title">🔗 搭配学习</h2>
         <div className="completion-state">
           <div className="completion-icon">🎉</div>
           <h3>今日搭配任务已完成！</h3>
-          <p>认识：{sessionSummary?.known || 0} 个</p>
-          <p>不认识：{sessionSummary?.unknown || 0} 个</p>
+          <p>认识：{sessionStats.known} 个</p>
+          <p>不认识：{sessionStats.unknown} 个</p>
           <div className="completion-actions">
-            <button className="btn btn--primary" onClick={handleReset}>
+            <button className="btn btn--primary" onClick={reset}>
               再来一组
             </button>
           </div>
@@ -112,7 +83,7 @@ export default function CollocationsPage() {
         <div className="empty-state">
           <div className="empty-icon">✅</div>
           <h3>今日没有需要复习的搭配</h3>
-          <button className="btn btn--primary" onClick={handleReset}>刷新</button>
+          <button className="btn btn--primary" onClick={reset}>刷新</button>
         </div>
       </div>
     );
@@ -158,19 +129,24 @@ export default function CollocationsPage() {
           <SpeakerButton text={currentItem.phrase} label={`朗读 ${currentItem.phrase}`} />
         </div>
 
-        <div
-          className={`collocation-card__meaning ${meaningRevealed ? 'meaning--revealed' : ''}`}
-          onClick={() => setMeaningRevealed(true)}
-        >
-          {meaningRevealed ? (
+        {/* Phonetic display */}
+        {currentItem.phonetic && (
+          <div className="collocation-card__phonetic">
+            <span className="phonetic-text">{currentItem.phonetic}</span>
+            <SpeakerButton text={currentItem.phrase} label="听发音" small />
+          </div>
+        )}
+
+        <div className={`collocation-card__meaning ${answered ? 'meaning--revealed' : ''}`}>
+          {answered ? (
             <span className="meaning-text">{currentItem.meaning}</span>
           ) : (
-            <span className="meaning-hint">点击查看释义</span>
+            <span className="meaning-hint">作答后将显示释义</span>
           )}
         </div>
 
-        {/* Example sentence (shown after meaning revealed) */}
-        {meaningRevealed && currentItem.example && (
+        {/* Example sentence (shown after answer revealed) */}
+        {answered && currentItem.example && (
           <div className="collocation-card__example">
             <div className="example-header">
               <span>📖 例句</span>
@@ -184,8 +160,18 @@ export default function CollocationsPage() {
 
       <StickyButtons
         variant="know-dontknow"
-        onLeft={handleDontKnow}
-        onRight={handleKnow}
+        onLeft={() => respond(false)}
+        onRight={() => respond(true)}
+        leftLabel="不认识"
+        rightLabel="认识"
+        disabled={answered}
+        showLeftRight={true}
+        onPrev={goBack}
+        onNext={advance}
+        prevDisabled={!canGoBack}
+        nextDisabled={!answered}
+        nextLabel={progress.done + 1 >= progress.total && answered ? '完成' : '下一题'}
+        answered={answered}
       />
     </div>
   );

@@ -12,17 +12,24 @@ import { shuffleArray } from '../utils/helpers';
  * Core study session hook. Manages the queue, progress, and user responses
  * for any item type (word, sentence, collocation).
  *
+ * Flow:
+ *   1. User sees item, clicks "认识" or "不认识" → meaning is revealed (answered=true)
+ *   2. User clicks "下一题" → advance to next item
+ *   3. User can click "上一题" → go back to any previous item (history preserved)
+ *
  * @param {object} options
  * @param {string} options.itemType - 'word' | 'sentence' | 'collocation'
  * @param {number} options.dailyQuota - Maximum items per session
- * @returns {{ currentItem, progress, isComplete, respond, reset, isLoading, error }}
+ * @returns {{ currentItem, progress, isComplete, respond, advance, goToItem, canGoBack, canGoNext, answered, sessionStats, isLoading, error, reset }}
  */
 export function useStudy({ itemType, dailyQuota }) {
   const [queue, setQueue] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-  const processingRef = useRef(false); // Prevent double-tap
+  const [answered, setAnswered] = useState(false);
+  const [answers, setAnswers] = useState({}); // { index: { known: boolean, timestamp: string } }
+  const processingRef = useRef(false);
 
   // Build the session queue
   const buildSession = useCallback(async () => {
@@ -53,6 +60,8 @@ export function useStudy({ itemType, dailyQuota }) {
   useEffect(() => {
     setIsLoading(true);
     setError(null);
+    setAnswers({});
+    setAnswered(false);
     buildSession()
       .then(queue => {
         setQueue(queue);
@@ -74,12 +83,22 @@ export function useStudy({ itemType, dailyQuota }) {
 
   const isComplete = queue.length > 0 && currentIndex >= queue.length;
 
+  const canGoBack = currentIndex > 0;
+  const canGoNext = answered && currentIndex < queue.length - 1;
+
+  // Session stats derived from answers
+  const sessionStats = {
+    known: Object.values(answers).filter(a => a.known).length,
+    unknown: Object.values(answers).filter(a => !a.known).length
+  };
+
   /**
    * Respond to current item: known (true) or not known (false).
-   * Debounced internally to prevent double-tap issues.
+   * This marks the answer but does NOT advance to next item.
    */
   const respond = useCallback(async (known) => {
     if (!currentItem || processingRef.current || isComplete) return;
+    if (answers[currentIndex] !== undefined) return; // Already answered
 
     processingRef.current = true;
 
@@ -135,16 +154,51 @@ export function useStudy({ itemType, dailyQuota }) {
         });
       }
 
-      // Advance to next item
-      setCurrentIndex(prev => prev + 1);
+      // Store answer in history
+      setAnswers(prev => ({
+        ...prev,
+        [currentIndex]: { known, timestamp: new Date().toISOString() }
+      }));
+      setAnswered(true);
     } catch (err) {
       console.error('Failed to save study progress:', err);
       setError('保存学习进度失败');
     } finally {
-      // Small delay to prevent accidental double-tap
       setTimeout(() => { processingRef.current = false; }, 300);
     }
-  }, [currentItem, itemType, isComplete]);
+  }, [currentItem, itemType, isComplete, answers, currentIndex]);
+
+  /**
+   * Advance to the next item. Only allowed after answering.
+   */
+  const advance = useCallback(() => {
+    if (currentIndex < queue.length) {
+      const nextIndex = currentIndex + 1;
+      setCurrentIndex(nextIndex);
+      setAnswered(answers[nextIndex] !== undefined);
+    }
+  }, [currentIndex, queue.length, answers]);
+
+  /**
+   * Go to a specific item in the queue. Restore answer state if available.
+   */
+  const goToItem = useCallback((index) => {
+    if (index >= 0 && index < queue.length) {
+      setCurrentIndex(index);
+      setAnswered(answers[index] !== undefined);
+    }
+  }, [queue.length, answers]);
+
+  /**
+   * Go back to the previous item.
+   */
+  const goBack = useCallback(() => {
+    if (currentIndex > 0) {
+      const prevIndex = currentIndex - 1;
+      setCurrentIndex(prevIndex);
+      setAnswered(answers[prevIndex] !== undefined);
+    }
+  }, [currentIndex, answers]);
 
   /**
    * Reset the session (re-build the queue).
@@ -152,6 +206,8 @@ export function useStudy({ itemType, dailyQuota }) {
   const reset = useCallback(async () => {
     setIsLoading(true);
     setError(null);
+    setAnswers({});
+    setAnswered(false);
     try {
       const newQueue = await buildSession();
       setQueue(newQueue);
@@ -167,6 +223,14 @@ export function useStudy({ itemType, dailyQuota }) {
     progress,
     isComplete,
     respond,
+    advance,
+    goToItem,
+    goBack,
+    canGoBack,
+    canGoNext,
+    answered,
+    answers,
+    sessionStats,
     reset,
     isLoading,
     error

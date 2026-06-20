@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { getAllWords, getSetting, setSetting, addCustomWord, deleteCustomWord, updateCustomWord } from '../utils/db';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { getAllWords, getSetting, setSetting, addCustomWord, deleteCustomWord } from '../utils/db';
 import SpeakerButton from '../components/SpeakerButton';
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
@@ -10,6 +10,8 @@ const STATUS_LABELS = {
   mastered: '已掌握'
 };
 
+const WORD_TYPES = ['noun', 'verb', 'adjective', 'adverb', 'preposition', 'conjunction', 'pronoun', 'interjection', 'article', 'number'];
+
 export default function VocabularyPage() {
   const [words, setWords] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -19,11 +21,16 @@ export default function VocabularyPage() {
   const [wordbook, setWordbook] = useState([]);
   const [showWordbook, setShowWordbook] = useState(false);
 
+  // File upload state
+  const [showUpload, setShowUpload] = useState(false);
+  const [uploadLog, setUploadLog] = useState([]);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef(null);
+
   useEffect(() => {
     async function load() {
       try {
         const allWords = await getAllWords();
-        // Sort alphabetically
         allWords.sort((a, b) => a.word.localeCompare(b.word));
         setWords(allWords);
 
@@ -36,6 +43,12 @@ export default function VocabularyPage() {
     }
     load();
   }, []);
+
+  const reloadWords = async () => {
+    const allWords = await getAllWords();
+    allWords.sort((a, b) => a.word.localeCompare(b.word));
+    setWords(allWords);
+  };
 
   const toggleWordbook = useCallback(async (wordId) => {
     const updated = wordbook.includes(wordId)
@@ -55,16 +68,13 @@ export default function VocabularyPage() {
     if (!newWord.word.trim() || !newWord.meaning.trim()) return;
     setAddingWord(true);
     try {
-      const saved = await addCustomWord({
+      await addCustomWord({
         word: newWord.word.trim(),
         phonetic: newWord.phonetic.trim() || `/${newWord.word.trim()}/`,
         meaning: newWord.meaning.trim(),
         type: newWord.type
       });
-      // Reload word list
-      const allWords = await getAllWords();
-      allWords.sort((a, b) => a.word.localeCompare(b.word));
-      setWords(allWords);
+      await reloadWords();
       setNewWord({ word: '', phonetic: '', meaning: '', type: 'noun' });
       setShowAddForm(false);
     } catch (err) {
@@ -78,27 +88,154 @@ export default function VocabularyPage() {
     if (!confirm('确定要删除这个单词吗？')) return;
     try {
       await deleteCustomWord(wordId);
-      const allWords = await getAllWords();
-      allWords.sort((a, b) => a.word.localeCompare(b.word));
-      setWords(allWords);
+      await reloadWords();
     } catch (err) {
       console.error('Failed to delete word:', err);
     }
   };
 
+  // ── File Upload / Import ──
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setUploading(true);
+    setUploadLog([]);
+    const logs = [];
+
+    try {
+      const text = await file.text();
+      const ext = file.name.split('.').pop().toLowerCase();
+
+      let parsedWords = [];
+
+      if (ext === 'json') {
+        // JSON format: array of word objects or { words: [...] }
+        const data = JSON.parse(text);
+        const arr = Array.isArray(data) ? data : (data.words || data.vocabulary || data.data || []);
+        parsedWords = arr.map(item => ({
+          word: item.word || item.english || item.en || '',
+          phonetic: item.phonetic || item.pronunciation || '',
+          meaning: item.meaning || item.chinese || item.cn || item.translation || '',
+          type: item.type || item.pos || item.partOfSpeech || 'noun'
+        }));
+      } else if (ext === 'csv') {
+        // CSV format: word,meaning[,phonetic[,type]]
+        const lines = text.split(/\r?\n/).filter(l => l.trim());
+        const header = lines[0].toLowerCase();
+        const hasHeader = header.includes('word') || header.includes('english') || header.includes('单词');
+
+        const startIdx = hasHeader ? 1 : 0;
+        for (let i = startIdx; i < lines.length; i++) {
+          const cols = parseCSVLine(lines[i]);
+          if (cols.length >= 2) {
+            parsedWords.push({
+              word: (cols[0] || '').trim(),
+              meaning: (cols[1] || '').trim(),
+              phonetic: cols[2] ? cols[2].trim() : '',
+              type: cols[3] ? cols[3].trim().toLowerCase() : 'noun'
+            });
+          }
+        }
+      } else {
+        // Plain text: one word per line, "word  meaning" or "word,meaning"
+        const lines = text.split(/\r?\n/).filter(l => l.trim());
+        for (const line of lines) {
+          // Try comma separator
+          let parts;
+          if (line.includes(',')) {
+            parts = line.split(',').map(s => s.trim());
+          } else if (line.includes('\t')) {
+            parts = line.split('\t').map(s => s.trim());
+          } else {
+            // Space separator: "word meaning"
+            const match = line.match(/^(\S+)\s+(.+)$/);
+            if (match) {
+              parts = [match[1], match[2]];
+            } else {
+              parts = [line.trim(), ''];
+            }
+          }
+          if (parts[0]) {
+            parsedWords.push({
+              word: parts[0],
+              meaning: parts[1] || '',
+              phonetic: parts[2] || '',
+              type: parts[3] ? parts[3].toLowerCase() : 'noun'
+            });
+          }
+        }
+      }
+
+      // Filter invalid entries and normalize
+      parsedWords = parsedWords.filter(w => w.word && w.meaning);
+
+      if (parsedWords.length === 0) {
+        logs.push('❌ 未能从文件中解析出有效单词。请检查格式。');
+        setUploadLog(logs);
+        setUploading(false);
+        return;
+      }
+
+      logs.push(`📄 文件: ${file.name}`);
+      logs.push(`📊 解析到 ${parsedWords.length} 个单词`);
+
+      // Normalize types
+      parsedWords = parsedWords.map(w => ({
+        ...w,
+        type: WORD_TYPES.includes(w.type) ? w.type : guessWordType(w.type || w.word),
+        phonetic: w.phonetic || generatePhonetic(w.word)
+      }));
+
+      // Add words to database
+      let added = 0;
+      let skipped = 0;
+      const existingWords = await getAllWords();
+      const existingWordTexts = new Set(existingWords.map(w => w.word.toLowerCase()));
+
+      for (const pw of parsedWords) {
+        if (existingWordTexts.has(pw.word.toLowerCase())) {
+          skipped++;
+          continue;
+        }
+        try {
+          await addCustomWord(pw);
+          existingWordTexts.add(pw.word.toLowerCase());
+          added++;
+        } catch (err) {
+          logs.push(`⚠️ 添加 "${pw.word}" 失败: ${err.message}`);
+        }
+      }
+
+      logs.push(`✅ 成功添加 ${added} 个单词`);
+      if (skipped > 0) logs.push(`⏭️ 跳过 ${skipped} 个重复单词`);
+
+      await reloadWords();
+    } catch (err) {
+      logs.push(`❌ 文件处理失败: ${err.message}`);
+    }
+
+    setUploadLog(logs);
+    setUploading(false);
+
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  // ── Filtered words ──
   const filteredWords = useMemo(() => {
     let result = showWordbook
       ? words.filter(w => wordbook.includes(w.id))
       : words;
 
-    // Letter filter
     if (letterFilter) {
       result = result.filter(w =>
         w.word.toLowerCase().startsWith(letterFilter.toLowerCase())
       );
     }
 
-    // Search filter
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       result = result.filter(w =>
@@ -107,7 +244,6 @@ export default function VocabularyPage() {
       );
     }
 
-    // Status filter
     if (statusFilter !== 'all') {
       result = result.filter(w => w.status === statusFilter);
     }
@@ -142,7 +278,7 @@ export default function VocabularyPage() {
         )}
       </div>
 
-      {/* Status filter */}
+      {/* Filter bar */}
       <div className="filter-bar">
         <button
           className={`filter-chip ${statusFilter === 'all' ? 'filter-chip--active' : ''}`}
@@ -170,6 +306,12 @@ export default function VocabularyPage() {
           onClick={() => setShowAddForm(!showAddForm)}
         >
           ＋ 添加单词
+        </button>
+        <button
+          className="filter-chip filter-chip--upload"
+          onClick={() => setShowUpload(!showUpload)}
+        >
+          📤 导入文件
         </button>
       </div>
 
@@ -213,6 +355,8 @@ export default function VocabularyPage() {
                 <option value="conjunction">连词</option>
                 <option value="pronoun">代词</option>
                 <option value="interjection">感叹词</option>
+                <option value="article">冠词</option>
+                <option value="number">数词</option>
               </select>
             </div>
             <div className="form-actions">
@@ -224,6 +368,77 @@ export default function VocabularyPage() {
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* File Upload Section */}
+      {showUpload && (
+        <div className="add-word-form upload-section">
+          <h4>📤 导入单词文件</h4>
+          <p style={{fontSize: '0.8rem', color: 'var(--color-text-secondary)', marginBottom: '0.75rem'}}>
+            支持 JSON、CSV、TXT 格式。自动识别字段并适配格式。
+          </p>
+
+          <div className="upload-formats">
+            <details>
+              <summary>📋 支持的格式说明</summary>
+              <div style={{fontSize: '0.75rem', marginTop: '0.5rem', lineHeight: 1.6}}>
+                <p><strong>JSON 格式:</strong></p>
+                <pre style={{background: 'var(--color-bg-secondary)', padding: '0.5rem', borderRadius: '4px', overflow: 'auto', fontSize: '0.7rem'}}>
+{`[
+  {"word": "apple", "meaning": "苹果", "phonetic": "/ˈæpəl/", "type": "noun"},
+  {"word": "run", "meaning": "跑", "type": "verb"}
+]`}
+                </pre>
+
+                <p><strong>CSV 格式:</strong></p>
+                <pre style={{background: 'var(--color-bg-secondary)', padding: '0.5rem', borderRadius: '4px', overflow: 'auto', fontSize: '0.7rem'}}>
+{`word,meaning,phonetic,type
+apple,苹果,/ˈæpəl/,noun
+run,跑,,verb`}
+                </pre>
+
+                <p><strong>TXT 格式 (每行一个词):</strong></p>
+                <pre style={{background: 'var(--color-bg-secondary)', padding: '0.5rem', borderRadius: '4px', overflow: 'auto', fontSize: '0.7rem'}}>
+{`apple 苹果
+run 跑
+book 书, /bʊk/, noun`}
+                </pre>
+              </div>
+            </details>
+          </div>
+
+          <div className="upload-actions" style={{marginTop: '0.75rem'}}>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".json,.csv,.txt,.text"
+              onChange={handleFileUpload}
+              style={{display: 'none'}}
+              id="word-file-upload"
+            />
+            <label htmlFor="word-file-upload" className="btn btn--primary btn--small" style={{cursor: 'pointer'}}>
+              {uploading ? '导入中...' : '选择文件'}
+            </label>
+            <span style={{fontSize: '0.75rem', marginLeft: '0.5rem', color: 'var(--color-text-secondary)'}}>
+              自动去重，跳过已存在的单词
+            </span>
+          </div>
+
+          {uploadLog.length > 0 && (
+            <div className="upload-log" style={{
+              marginTop: '0.75rem',
+              padding: '0.75rem',
+              background: 'var(--color-bg-secondary)',
+              borderRadius: '8px',
+              fontSize: '0.8rem',
+              lineHeight: 1.6
+            }}>
+              {uploadLog.map((msg, i) => (
+                <div key={i}>{msg}</div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -297,4 +512,52 @@ export default function VocabularyPage() {
       )}
     </div>
   );
+}
+
+/**
+ * Parse a CSV line that may contain quoted fields.
+ */
+function parseCSVLine(line) {
+  const result = [];
+  let current = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      inQuotes = !inQuotes;
+    } else if (ch === ',' && !inQuotes) {
+      result.push(current.trim());
+      current = '';
+    } else {
+      current += ch;
+    }
+  }
+  result.push(current.trim());
+  return result;
+}
+
+/**
+ * Guess word type from type string or word.
+ */
+function guessWordType(typeStr) {
+  const t = typeStr.toLowerCase();
+  if (t.includes('名') || t.includes('noun') || t === 'n') return 'noun';
+  if (t.includes('动') || t.includes('verb') || t === 'v') return 'verb';
+  if (t.includes('形容') || t.includes('adj') || t === 'a') return 'adjective';
+  if (t.includes('副') || t.includes('adv')) return 'adverb';
+  if (t.includes('介') || t.includes('prep')) return 'preposition';
+  if (t.includes('连') || t.includes('conj')) return 'conjunction';
+  if (t.includes('代') || t.includes('pron')) return 'pronoun';
+  return 'noun';
+}
+
+/**
+ * Generate a simple phonetic transcription for a word.
+ * This is a fallback when no phonetic is provided.
+ */
+function generatePhonetic(word) {
+  if (!word) return '';
+  // Simple mapping - just a fallback notation
+  return `/${word}/`;
 }

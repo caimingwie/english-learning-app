@@ -3,12 +3,14 @@ import React, { useMemo } from 'react';
 /**
  * Renders an English sentence with S/V/O color highlighting.
  * S → blue underline, V → red underline, O → green underline.
+ * Each word is clickable to show its Chinese meaning.
  *
  * Props:
  *   sentence: { english, chinese, structure: { S, V, O, Adv?, Adj? } }
  *   showChinese: whether to show the Chinese translation
+ *   onWordClick: callback when a word is clicked, receives the word string
  */
-export default function SentenceRenderer({ sentence, showChinese = false }) {
+export default function SentenceRenderer({ sentence, showChinese = false, onWordClick }) {
   if (!sentence) return null;
 
   const { english, chinese, structure } = sentence;
@@ -24,8 +26,38 @@ export default function SentenceRenderer({ sentence, showChinese = false }) {
           if (seg.role) {
             return (
               <span key={i} className={`sentence-role sentence-role--${seg.role.toLowerCase()}`}>
-                {seg.text}
+                {onWordClick ? (
+                  <span
+                    className="sentence-role__clickable"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onWordClick(seg.text);
+                    }}
+                    title="点击查看中文意思"
+                  >
+                    {seg.text}
+                  </span>
+                ) : (
+                  seg.text
+                )}
                 <sup className="sentence-role__label">{seg.role}</sup>
+              </span>
+            );
+          }
+          // Non-role text: make each word clickable
+          if (onWordClick) {
+            return (
+              <span
+                key={i}
+                className="sentence-word-clickable"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const word = seg.text.trim();
+                  if (word) onWordClick(word);
+                }}
+                title="点击查看中文意思"
+              >
+                {seg.text}
               </span>
             );
           }

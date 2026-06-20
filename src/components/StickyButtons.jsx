@@ -12,9 +12,13 @@ import React from 'react';
  *   rightLabel: custom label for right button
  *   centerLabel: custom label for center button
  *   disabled: disable all buttons
- *   showLeftRight: show prev/next buttons
+ *   showLeftRight: show prev/next navigation above main buttons
  *   onPrev: handler for previous button
  *   onNext: handler for next button
+ *   prevDisabled: disable prev button
+ *   nextDisabled: disable next button
+ *   nextLabel: custom label for next button
+ *   answered: whether current item has been answered (changes next button label)
  */
 export default function StickyButtons({
   variant = 'know-dontknow',
@@ -27,7 +31,11 @@ export default function StickyButtons({
   disabled = false,
   showLeftRight = false,
   onPrev,
-  onNext
+  onNext,
+  prevDisabled = false,
+  nextDisabled = false,
+  nextLabel,
+  answered = false
 }) {
   const renderMainButtons = () => {
     switch (variant) {
@@ -114,16 +122,19 @@ export default function StickyButtons({
           <button
             className="btn btn--small btn--secondary"
             onClick={onPrev}
-            disabled={disabled}
+            disabled={prevDisabled}
           >
             ← 上一题
           </button>
+          <span className="nav-progress-indicator">
+            {answered ? '✓ 已作答' : '请先作答'}
+          </span>
           <button
-            className="btn btn--small btn--secondary"
+            className="btn btn--small btn--primary"
             onClick={onNext}
-            disabled={disabled}
+            disabled={nextDisabled}
           >
-            下一题 →
+            {nextLabel || '下一题'} →
           </button>
         </div>
       )}

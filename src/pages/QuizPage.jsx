@@ -13,9 +13,11 @@ import {
 import { calculateNextReview, getToday } from '../utils/ebbinghaus';
 import { shuffleArray } from '../utils/helpers';
 import ProgressBar from '../components/ProgressBar';
+import StickyButtons from '../components/StickyButtons';
 
 /**
  * Mixed quiz page — generates questions from all learned items.
+ * Supports re-selecting answers and previous/next navigation.
  */
 export default function QuizPage() {
   const { state, updateSetting } = useAppContext();
@@ -23,12 +25,13 @@ export default function QuizPage() {
 
   const [questions, setQuestions] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [selectedAnswer, setSelectedAnswer] = useState(null);
-  const [isCorrect, setIsCorrect] = useState(null);
   const [score, setScore] = useState(0);
-  const [phase, setPhase] = useState('setup'); // 'setup' | 'active' | 'feedback' | 'complete'
+  const [phase, setPhase] = useState('setup'); // 'setup' | 'active' | 'complete'
   const [loading, setLoading] = useState(false);
   const [quotaSelector, setQuotaSelector] = useState(false);
+
+  // Track answers per question: { questionId: { selectedAnswer, isCorrect } }
+  const [questionAnswers, setQuestionAnswers] = useState({});
 
   // Generate quiz questions
   const generateQuiz = useCallback(async () => {
@@ -56,7 +59,7 @@ export default function QuizPage() {
           .sort(() => Math.random() - 0.5)
           .slice(0, 3);
 
-        if (distractors.length < 3) continue; // Skip if not enough distractors
+        if (distractors.length < 3) continue;
 
         questions.push({
           id: `q_wm_${correct.id}`,
@@ -169,24 +172,12 @@ export default function QuizPage() {
     setQuestions(qs);
     setCurrentIndex(0);
     setScore(0);
-    setSelectedAnswer(null);
-    setIsCorrect(null);
+    setQuestionAnswers({});
     setPhase('active');
   };
 
-  const handleSelectAnswer = async (answer) => {
-    if (selectedAnswer !== null) return; // Already answered
-
-    const question = questions[currentIndex];
-    const correct = answer === question.correctAnswer;
-    setSelectedAnswer(answer);
-    setIsCorrect(correct);
-
-    if (correct) {
-      setScore(prev => prev + 1);
-    }
-
-    // Update Ebbinghaus and log
+  // Save answer to IndexedDB
+  const saveAnswerToDB = useCallback(async (question, correct) => {
     try {
       const today = getToday();
       const { nextReview, interval, status } = calculateNextReview(
@@ -226,17 +217,51 @@ export default function QuizPage() {
     } catch (err) {
       console.error('Failed to save quiz result:', err);
     }
+  }, []);
 
-    // Auto-advance after delay
-    setTimeout(() => {
-      if (currentIndex + 1 >= questions.length) {
-        setPhase('complete');
-      } else {
-        setCurrentIndex(prev => prev + 1);
-        setSelectedAnswer(null);
-        setIsCorrect(null);
-      }
-    }, 800);
+  const handleSelectAnswer = async (answer) => {
+    const question = questions[currentIndex];
+    const correct = answer === question.correctAnswer;
+    const prevAnswer = questionAnswers[question.id];
+
+    // If this question was already answered, we're changing the answer
+    if (prevAnswer) {
+      // Update the answer
+      const newAnswers = { ...questionAnswers, [question.id]: { selectedAnswer: answer, isCorrect: correct } };
+      setQuestionAnswers(newAnswers);
+
+      // Recalculate score
+      const newScore = Object.values(newAnswers).filter(a => a.isCorrect).length;
+      setScore(newScore);
+
+      // Save the updated answer to DB
+      await saveAnswerToDB(question, correct);
+      return;
+    }
+
+    // First time answering this question
+    const newAnswers = { ...questionAnswers, [question.id]: { selectedAnswer: answer, isCorrect: correct } };
+    setQuestionAnswers(newAnswers);
+
+    if (correct) {
+      setScore(prev => prev + 1);
+    }
+
+    await saveAnswerToDB(question, correct);
+  };
+
+  const handleAdvance = () => {
+    if (currentIndex + 1 >= questions.length) {
+      setPhase('complete');
+    } else {
+      setCurrentIndex(prev => prev + 1);
+    }
+  };
+
+  const handleGoBack = () => {
+    if (currentIndex > 0) {
+      setCurrentIndex(prev => prev - 1);
+    }
   };
 
   const handleRetry = () => {
@@ -244,9 +269,10 @@ export default function QuizPage() {
     setQuestions([]);
     setCurrentIndex(0);
     setScore(0);
-    setSelectedAnswer(null);
-    setIsCorrect(null);
+    setQuestionAnswers({});
   };
+
+  const currentAnswer = questions[currentIndex] ? questionAnswers[questions[currentIndex].id] : null;
 
   // ── Setup phase ──
   if (phase === 'setup') {
@@ -257,6 +283,7 @@ export default function QuizPage() {
           <div className="quiz-setup__icon">📝</div>
           <h3>综合测验</h3>
           <p>从已学内容中随机出题，测试你的掌握程度。</p>
+          <p style={{fontSize: '0.85rem', color: 'var(--color-text-secondary)'}}>可以重新选择答案，支持上一题/下一题导航。</p>
 
           <div className="quiz-setup__quota">
             <label>题数设置：</label>
@@ -324,15 +351,20 @@ export default function QuizPage() {
 
   // ── Active quiz phase ──
   const question = questions[currentIndex];
+  const totalAnswered = Object.keys(questionAnswers).length;
 
   return (
     <div className="page">
       <h2 className="page__title">📝 测验</h2>
       <ProgressBar
-        done={currentIndex + (selectedAnswer !== null ? 1 : 0)}
+        done={currentIndex + 1}
         total={questions.length}
-        label="已完成"
+        label="进度"
       />
+
+      <div style={{textAlign: 'center', marginBottom: '0.5rem', fontSize: '0.8rem', color: 'var(--color-text-secondary)'}}>
+        已作答：{totalAnswered}/{questions.length} 题 | 正确：{score} 题
+      </div>
 
       <div className="quiz-card">
         <div className="quiz-card__prompt">
@@ -349,10 +381,10 @@ export default function QuizPage() {
         <div className="quiz-options">
           {question.options.map((option, i) => {
             let className = 'quiz-option';
-            if (selectedAnswer !== null) {
+            if (currentAnswer) {
               if (option === question.correctAnswer) {
                 className += ' quiz-option--correct';
-              } else if (option === selectedAnswer) {
+              } else if (option === currentAnswer.selectedAnswer && !currentAnswer.isCorrect) {
                 className += ' quiz-option--wrong';
               } else {
                 className += ' quiz-option--dimmed';
@@ -363,21 +395,35 @@ export default function QuizPage() {
                 key={i}
                 className={className}
                 onClick={() => handleSelectAnswer(option)}
-                disabled={selectedAnswer !== null}
               >
                 <span className="quiz-option__letter">{'ABCD'[i]}</span>
                 <span className="quiz-option__text">{option}</span>
+                {currentAnswer && option === currentAnswer.selectedAnswer && (
+                  <span className="quiz-option__mark">{currentAnswer.isCorrect ? ' ✓' : ' ✗'}</span>
+                )}
               </button>
             );
           })}
         </div>
 
-        {selectedAnswer !== null && (
-          <div className={`quiz-feedback ${isCorrect ? 'quiz-feedback--correct' : 'quiz-feedback--wrong'}`}>
-            {isCorrect ? '✅ 正确！' : `❌ 错误！正确答案是：${question.correctAnswer}`}
+        {currentAnswer && (
+          <div className={`quiz-feedback ${currentAnswer.isCorrect ? 'quiz-feedback--correct' : 'quiz-feedback--wrong'}`}>
+            {currentAnswer.isCorrect
+              ? '✅ 正确！'
+              : `❌ 错误！正确答案是：${question.correctAnswer}`}
+            <span style={{fontSize: '0.75rem', marginLeft: '0.5rem', opacity: 0.7}}>（可重新选择）</span>
           </div>
         )}
       </div>
+
+      <StickyButtons
+        variant="prev-next"
+        onLeft={handleGoBack}
+        onRight={handleAdvance}
+        leftLabel="上一题"
+        rightLabel={currentIndex + 1 >= questions.length ? '完成' : '下一题'}
+        prevDisabled={currentIndex === 0}
+      />
     </div>
   );
 }

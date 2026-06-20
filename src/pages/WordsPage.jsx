@@ -7,7 +7,7 @@ import StickyButtons from '../components/StickyButtons';
 
 /**
  * Word learning/review page.
- * Uses the useStudy hook for the spaced-repetition study session.
+ * Flow: See word → Click 认识/不认识 → See Chinese meaning → Click 下一题 → Next word
  */
 export default function WordsPage() {
   const { state, updateSetting } = useAppContext();
@@ -19,64 +19,18 @@ export default function WordsPage() {
     progress,
     isComplete,
     respond,
+    advance,
+    goBack,
+    canGoBack,
+    canGoNext,
+    answered,
+    sessionStats,
     reset,
     isLoading,
     error
   } = useStudy({ itemType: 'word', dailyQuota });
 
-  const [meaningRevealed, setMeaningRevealed] = useState(false);
-  const [sessionSummary, setSessionSummary] = useState(null);
   const [quotaSelector, setQuotaSelector] = useState(false);
-
-  // Track session stats for summary
-  const sessionStats = React.useRef({ known: 0, unknown: 0 });
-  const lastProgressRef = React.useRef(0);
-
-  // Reset meaning reveal when item changes
-  React.useEffect(() => {
-    setMeaningRevealed(false);
-  }, [currentItem?.id]);
-
-  // Track stats
-  React.useEffect(() => {
-    const current = progress.done;
-    if (current > lastProgressRef.current) {
-      lastProgressRef.current = current;
-    }
-  }, [progress.done]);
-
-  const handleKnow = async () => {
-    if (!currentItem) return;
-    sessionStats.current.known++;
-    setMeaningRevealed(true);
-    await respond(true);
-    if (progress.done + 1 >= progress.total && progress.total > 0) {
-      setSessionSummary({ ...sessionStats.current });
-    }
-  };
-
-  const handleDontKnow = async () => {
-    if (!currentItem) return;
-    sessionStats.current.unknown++;
-    setMeaningRevealed(true);
-    await respond(false);
-    if (progress.done + 1 >= progress.total && progress.total > 0) {
-      setSessionSummary({ ...sessionStats.current });
-    }
-  };
-
-  const handleReset = () => {
-    sessionStats.current = { known: 0, unknown: 0 };
-    lastProgressRef.current = 0;
-    setSessionSummary(null);
-    setMeaningRevealed(false);
-    reset();
-  };
-
-  const handleQuotaChange = (val) => {
-    updateSetting('dailyWordQuota', val);
-    setQuotaSelector(false);
-  };
 
   // ── Loading state ──
   if (isLoading) {
@@ -102,17 +56,17 @@ export default function WordsPage() {
   }
 
   // ── Completion state ──
-  if (isComplete || sessionSummary) {
+  if (isComplete) {
     return (
       <div className="page">
         <h2 className="page__title">🧠 单词学习</h2>
         <div className="completion-state">
           <div className="completion-icon">🎉</div>
           <h3>今日任务已完成！</h3>
-          <p>认识：{sessionSummary?.known || 0} 个</p>
-          <p>不认识：{sessionSummary?.unknown || 0} 个</p>
+          <p>认识：{sessionStats.known} 个</p>
+          <p>不认识：{sessionStats.unknown} 个</p>
           <div className="completion-actions">
-            <button className="btn btn--primary" onClick={handleReset}>
+            <button className="btn btn--primary" onClick={reset}>
               再来一组
             </button>
           </div>
@@ -131,7 +85,7 @@ export default function WordsPage() {
           <h3>今日没有需要复习的单词</h3>
           <p>所有单词都已掌握，或者还没有新单词可学。</p>
           <div className="empty-actions">
-            <button className="btn btn--primary" onClick={handleReset}>
+            <button className="btn btn--primary" onClick={reset}>
               刷新
             </button>
           </div>
@@ -159,7 +113,10 @@ export default function WordsPage() {
               <button
                 key={n}
                 className={`quota-option ${n === dailyQuota ? 'quota-option--active' : ''}`}
-                onClick={() => handleQuotaChange(n)}
+                onClick={() => {
+                  updateSetting('dailyWordQuota', n);
+                  setQuotaSelector(false);
+                }}
               >
                 {n} 词/天
               </button>
@@ -186,14 +143,11 @@ export default function WordsPage() {
           />
         </div>
 
-        <div
-          className={`word-card__meaning ${meaningRevealed ? 'meaning--revealed' : ''}`}
-          onClick={() => setMeaningRevealed(true)}
-        >
-          {meaningRevealed ? (
+        <div className={`word-card__meaning ${answered ? 'meaning--revealed' : ''}`}>
+          {answered ? (
             <span className="meaning-text">{currentItem.meaning}</span>
           ) : (
-            <span className="meaning-hint">点击查看释义</span>
+            <span className="meaning-hint">作答后将显示释义</span>
           )}
         </div>
 
@@ -206,8 +160,18 @@ export default function WordsPage() {
 
       <StickyButtons
         variant="know-dontknow"
-        onLeft={handleDontKnow}
-        onRight={handleKnow}
+        onLeft={() => respond(false)}
+        onRight={() => respond(true)}
+        leftLabel="不认识"
+        rightLabel="认识"
+        disabled={answered}
+        showLeftRight={true}
+        onPrev={goBack}
+        onNext={advance}
+        prevDisabled={!canGoBack}
+        nextDisabled={!answered}
+        nextLabel={progress.done + 1 >= progress.total && answered ? '完成' : '下一题'}
+        answered={answered}
       />
     </div>
   );

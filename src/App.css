@@ -2428,6 +2428,188 @@ button:focus-visible,
   scrollbar-color: var(--color-border) transparent;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   New UI Elements — Word Popover, Navigation, Upload, Clickable Words
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ──── Word Meaning Popover (Sentence page) ──────────────────────────────── */
+.word-meaning-popover {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-top: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  background: var(--color-accent-light);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-md);
+  font-size: 0.9rem;
+  animation: popoverIn 0.2s ease-out;
+}
+
+@keyframes popoverIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.word-meaning-popover__word {
+  font-weight: 700;
+  color: var(--color-accent);
+  text-transform: lowercase;
+}
+
+.word-meaning-popover__arrow {
+  color: var(--color-text-tertiary);
+  font-size: 0.85rem;
+}
+
+.word-meaning-popover__meaning {
+  color: var(--color-text-primary);
+  font-weight: 500;
+  flex: 1;
+}
+
+.word-meaning-popover__close {
+  background: none;
+  border: none;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.word-meaning-popover__close:hover {
+  background: var(--color-glass-border);
+  color: var(--color-text-primary);
+}
+
+/* ──── Clickable Words in Sentences ──────────────────────────────────────── */
+.sentence-word-clickable {
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border-radius: 3px;
+  padding: 0 1px;
+}
+
+.sentence-word-clickable:hover {
+  background: var(--color-accent-light);
+  color: var(--color-accent);
+}
+
+.sentence-role__clickable {
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border-radius: 3px;
+  padding: 0 1px;
+}
+
+.sentence-role__clickable:hover {
+  filter: brightness(0.85);
+}
+
+/* ──── Sticky Buttons Navigation ─────────────────────────────────────────── */
+.sticky-buttons__nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding-bottom: var(--space-sm);
+  border-bottom: 1px solid var(--color-glass-border);
+  margin-bottom: var(--space-sm);
+}
+
+.nav-progress-indicator {
+  font-size: 0.75rem;
+  color: var(--color-text-tertiary);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* ──── Collocation Phonetic ──────────────────────────────────────────────── */
+.collocation-card__phonetic {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-top: var(--space-xs);
+  font-size: 1rem;
+  color: var(--color-text-secondary);
+  font-style: italic;
+  justify-content: center;
+  padding: var(--space-xs) 0;
+}
+
+.collocation-card__phonetic .phonetic-text {
+  font-family: 'Times New Roman', serif;
+  letter-spacing: 0.5px;
+}
+
+/* ──── Quiz Option Mark ──────────────────────────────────────────────────── */
+.quiz-option__mark {
+  font-weight: 700;
+  margin-left: var(--space-xs);
+  font-size: 0.9rem;
+}
+
+/* ──── File Upload Section ───────────────────────────────────────────────── */
+.upload-section {
+  margin-top: var(--space-xs);
+}
+
+.upload-formats {
+  font-size: 0.8rem;
+}
+
+.upload-formats summary {
+  cursor: pointer;
+  color: var(--color-accent);
+  font-weight: 500;
+}
+
+.upload-formats pre {
+  margin: 4px 0;
+  font-size: 0.7rem;
+}
+
+.upload-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.upload-log {
+  font-family: monospace;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.upload-log div {
+  padding: 1px 0;
+}
+
+.filter-chip--upload {
+  background: var(--color-warning-light);
+  color: var(--color-warning);
+  border-color: var(--color-warning);
+}
+
+/* ──── Sticky Buttons States ─────────────────────────────────────────────── */
+.sticky-buttons .btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.sticky-buttons__nav .btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.sticky-buttons__nav .btn--small.btn--primary:not(:disabled) {
+  background: var(--color-accent);
+  color: #fff;
+  border-color: var(--color-accent);
+}
+
 /* ──── Landscape Phone Optimization ──────────────────────────────────────────── */
 @media (max-width: 480px) and (orientation: landscape) {
   .word-card__word {
